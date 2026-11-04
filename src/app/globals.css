@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+/*
+  Design notes
+  - Subject: a tradie's van door and price board, read on a phone in a driveway.
+  - One typeface (Archivo). Headings run expanded and heavy like signwriting;
+    body text runs at normal width.
+  - Cool greys and slate ink, safety-amber for the one action that matters.
+  - The business's own brand colour replaces amber on its public page.
+*/
+
+@theme {
+  --color-ink: #14212b;
+  --color-steel: #5b6b78;
+  --color-mist: #8a98a4;
+  --color-line: #d9dee2;
+  --color-surface: #f3f5f6;
+  --color-paper: #ffffff;
+  --color-amber: #f2a900;
+  --color-amber-deep: #c98c00;
+  --color-go: #1e7a4f;
+  --color-go-soft: #e3f2ea;
+  --color-stop: #b3261e;
+  --color-stop-soft: #fbe9e7;
+  --color-wait: #8a5a00;
+  --color-wait-soft: #fff4d6;
+
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+:root {
+  --brand: #f2a900;
+  --brand-ink: #14212b;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  font-stretch: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Expanded, heavy display type. */
+.type-display {
+  font-stretch: 125%;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+.type-heading {
+  font-stretch: 112%;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Form controls */
+.field {
+  display: block;
+  width: 100%;
+  border: 1.5px solid var(--color-line);
+  background: var(--color-paper);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  color: inherit;
+  min-height: 48px;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-ink);
+  box-shadow: 0 0 0 3px rgb(20 33 43 / 0.12);
+}
+.field[aria-invalid="true"] {
+  border-color: var(--color-stop);
+}
+textarea.field {
+  min-height: 110px;
+}
+.label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+}
+.hint {
+  color: var(--color-steel);
+  font-size: 0.875rem;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.65rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-stretch: 108%;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms, transform 80ms;
+  text-decoration: none;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--color-amber);
+  color: var(--color-ink);
+}
+.btn-primary:hover {
+  background: var(--color-amber-deep);
+}
+.btn-brand {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+.btn-brand:hover {
+  filter: brightness(0.94);
+}
+.btn-dark {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+.btn-dark:hover {
+  background: #22343f;
+}
+.btn-ghost {
+  background: var(--color-paper);
+  border-color: var(--color-line);
+  color: var(--color-ink);
+}
+.btn-ghost:hover {
+  border-color: var(--color-ink);
+}
+.btn-danger {
+  background: var(--color-paper);
+  border-color: var(--color-stop);
+  color: var(--color-stop);
+}
+.btn-sm {
+  min-height: 38px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+/* Panels: a plain white sheet, used sparingly. */
+.panel {
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

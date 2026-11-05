@@ -66,23 +66,23 @@ export function HoursForm({
         <div>
           <label className="label" htmlFor="lead_time_hours">Notice needed</label>
           <select id="lead_time_hours" name="lead_time_hours" defaultValue={settings.lead_time_hours} className="field">
-            {[0, 2, 4, 12, 24, 48, 72].map((h) => (
-              <option key={h} value={h}>{h === 0 ? "None" : h < 24 ? `${h} hours` : `${h / 24} day${h === 24 ? "" : "s"}`}</option>
+            {withCurrent([0, 2, 4, 12, 24, 48, 72], settings.lead_time_hours).map((h) => (
+              <option key={h} value={h}>{noticeLabel(h)}</option>
             ))}
           </select>
         </div>
         <div>
           <label className="label" htmlFor="booking_window_days">Book up to</label>
           <select id="booking_window_days" name="booking_window_days" defaultValue={settings.booking_window_days} className="field">
-            {[7, 14, 28, 42, 60, 90].map((d) => (
-              <option key={d} value={d}>{d % 7 === 0 ? `${d / 7} weeks ahead` : `${d} days ahead`}</option>
+            {withCurrent([7, 14, 28, 42, 60, 90], settings.booking_window_days).map((d) => (
+              <option key={d} value={d}>{windowLabel(d)}</option>
             ))}
           </select>
         </div>
         <div>
           <label className="label" htmlFor="slot_interval_min">Start times every</label>
           <select id="slot_interval_min" name="slot_interval_min" defaultValue={settings.slot_interval_min} className="field">
-            {[15, 30, 60, 120].map((m) => (
+            {withCurrent([15, 30, 60, 120], settings.slot_interval_min).map((m) => (
               <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} hr`}</option>
             ))}
           </select>
@@ -125,4 +125,20 @@ export function TimeOffForm() {
       <button className="btn btn-dark" disabled={pending}>Block out</button>
     </form>
   );
+}
+
+/** Keeps a saved value selectable even when it isn't one of the presets, so saving never changes it silently. */
+function withCurrent(presets: number[], current: number): number[] {
+  return presets.includes(current) ? presets : [...presets, current].sort((a, b) => a - b);
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+function noticeLabel(h: number): string {
+  if (h === 0) return "None";
+  return h % 24 === 0 ? plural(h / 24, "day") : plural(h, "hour");
+}
+
+function windowLabel(d: number): string {
+  return `${d % 7 === 0 ? plural(d / 7, "week") : plural(d, "day")} ahead`;
 }

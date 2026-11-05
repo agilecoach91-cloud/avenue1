@@ -81,6 +81,11 @@ async function email(business: Business, kind: Kind, to: string | null, subject:
   return result;
 }
 
+/** Ends a sentence with a name without doubling a full stop ("Harbour Pest Co."). */
+function endSentence(name: string) {
+  return /[.!?]$/.test(name) ? name : `${name}.`;
+}
+
 function manageUrl(booking: Booking) {
   return `${appUrl()}/b/${booking.manage_token}`;
 }
@@ -112,7 +117,7 @@ export async function notifyBookingCreated(business: Business, booking: Booking)
       `Hi ${booking.customer_name.split(" ")[0]},`,
       "",
       confirmed
-        ? `You're booked with ${business.name}.`
+        ? `You're booked with ${endSentence(business.name)}`
         : `${business.name} has your request and will confirm it shortly.`,
       "",
       `Service: ${booking.service_name}`,
@@ -229,7 +234,7 @@ export async function sendReviewRequest(business: Business, booking: Booking) {
     "review_request",
     booking.customer_email,
     `How did we go, ${first}?`,
-    `Thanks for choosing ${business.name}.\n\nIf you were happy with the job, a quick Google review helps other locals find us:\n${business.google_review_url}\n\n${signature(business)}`,
+    `Thanks for choosing ${endSentence(business.name)}\n\nIf you were happy with the job, a quick Google review helps other locals find us:\n${business.google_review_url}\n\n${signature(business)}`,
     ctx,
   );
 }

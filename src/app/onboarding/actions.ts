@@ -97,6 +97,16 @@ export async function createBusiness(_prev: OnboardingState, formData: FormData)
     return { error: "We couldn't create your page. Try again." };
   }
 
+  const { data: location } = await supabase
+    .from("locations")
+    .insert({
+      business_id: business.id,
+      name: input.service_area || input.name,
+      address: input.address || null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
   await supabase.from("services").insert(
     template.services.map((s, i) => ({
       business_id: business.id,
@@ -108,10 +118,28 @@ export async function createBusiness(_prev: OnboardingState, formData: FormData)
       booking_mode: s.booking_mode,
       questions: s.questions ?? [],
       repeat_months: s.repeat_months ?? null,
+      icon: s.icon,
       sort: i,
     })),
   );
-  await supabase.from("availability").insert(DEFAULT_HOURS.map((h) => ({ ...h, business_id: business.id })));
+  if (template.addons.length) {
+    await supabase.from("addons").insert(
+      template.addons.map((a, i) => ({
+        business_id: business.id,
+        name: a.name,
+        description: a.description ?? null,
+        price_cents: a.price_cents ?? null,
+        price_note: a.price_note ?? null,
+        icon: a.icon,
+        sort: i,
+      })),
+    );
+  }
+  if (location) {
+    await supabase
+      .from("availability")
+      .insert(DEFAULT_HOURS.map((h) => ({ ...h, business_id: business.id, location_id: location.id })));
+  }
 
   redirect("/dashboard?welcome=1");
 }

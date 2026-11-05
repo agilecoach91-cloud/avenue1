@@ -41,17 +41,22 @@ export async function GET(request: Request) {
 
   const counts = { reminder_24h: 0, reminder_1h: 0, review_request: 0 };
 
+  // Skip a reminder when the customer only just got their confirmation text.
+  const notJustConfirmed = (rows: { id: string; confirmed_at: string | null }[] | null, minutes: number) =>
+    (rows ?? []).filter((r) => !r.confirmed_at || new Date(r.confirmed_at).getTime() < now - minutes * 60_000).map((r) => r.id);
+
   // Day-before reminders: starts in 3–24 hours, booked more than an hour ago.
   const { data: day } = await admin
     .from("bookings")
-    .select("id")
+    .select("id,confirmed_at")
     .eq("status", "confirmed")
     .is("reminder_24h_at", null)
     .gt("starts_at", iso(now + 3 * 3_600_000))
     .lte("starts_at", iso(now + 24 * 3_600_000))
     .lt("created_at", iso(now - 3_600_000))
-    .limit(200);
-  for (const b of await claim("reminder_24h_at", (day ?? []).map((r) => r.id))) {
+    .limit(200)
+    .returns<{ id: string; confirmed_at: string | null }[]>();
+  for (const b of await claim("reminder_24h_at", notJustConfirmed(day, 180))) {
     const biz = await businessFor(b.business_id);
     if (biz) {
       await sendReminder(biz, b, "reminder_24h");
@@ -62,14 +67,15 @@ export async function GET(request: Request) {
   // On-the-day reminders: starts within 75 minutes, booked more than 30 minutes ago.
   const { data: soon } = await admin
     .from("bookings")
-    .select("id")
+    .select("id,confirmed_at")
     .eq("status", "confirmed")
     .is("reminder_1h_at", null)
     .gt("starts_at", iso(now))
     .lte("starts_at", iso(now + 75 * 60_000))
     .lt("created_at", iso(now - 30 * 60_000))
-    .limit(200);
-  for (const b of await claim("reminder_1h_at", (soon ?? []).map((r) => r.id))) {
+    .limit(200)
+    .returns<{ id: string; confirmed_at: string | null }[]>();
+  for (const b of await claim("reminder_1h_at", notJustConfirmed(soon, 30))) {
     const biz = await businessFor(b.business_id);
     if (biz) {
       await sendReminder(biz, b, "reminder_1h");

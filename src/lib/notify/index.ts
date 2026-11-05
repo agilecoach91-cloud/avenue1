@@ -1,8 +1,10 @@
 import "server-only";
 import { appUrl, APP_NAME } from "@/lib/env";
 import { formatPhone, formatPrice, formatWhen } from "@/lib/format";
+import { addMessage, findOrCreateConversation } from "@/lib/inbox";
+import { formatAddonPrice } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PLAN_FEATURES, type Booking, type Business, type Enquiry } from "@/lib/types";
+import { PLAN_FEATURES, type Booking, type Business, type Conversation, type Enquiry, type Location } from "@/lib/types";
 import { sendEmail, sendSms, type SendResult } from "./providers";
 
 type Kind =
@@ -15,9 +17,17 @@ type Kind =
   | "owner_new_booking"
   | "owner_new_enquiry"
   | "owner_booking_cancelled"
-  | "enquiry_received";
+  | "owner_new_message"
+  | "enquiry_received"
+  | "inbox_reply";
 
-type Ctx = { bookingId?: string; enquiryId?: string };
+type Ctx = {
+  bookingId?: string;
+  enquiryId?: string;
+  /** Used to file customer texts in the inbox. */
+  customerName?: string | null;
+  locationId?: string | null;
+};
 
 async function smsUsedThisMonth(businessId: string): Promise<number> {
   const admin = createAdminClient();
@@ -71,6 +81,24 @@ async function sms(business: Business, kind: Kind, to: string | null, body: stri
     result = await sendSms(to, body);
   }
   await log(business, kind, "sms", to, body, result, ctx);
+  if (!kind.startsWith("owner_")) {
+    // Customer texts also go in the inbox thread, so replies have context.
+    const admin = createAdminClient();
+    const conversation = await findOrCreateConversation(admin, business.id, to, {
+      customerName: ctx.customerName,
+      locationId: ctx.locationId,
+    });
+    if (conversation) {
+      await addMessage(admin, conversation, {
+        direction: "out",
+        body,
+        kind: kind === "inbox_reply" ? null : kind,
+        status: result.status,
+        error: result.error,
+        providerId: result.providerId,
+      });
+    }
+  }
   return result;
 }
 
@@ -84,6 +112,28 @@ async function email(business: Business, kind: Kind, to: string | null, subject:
 /** Ends a sentence with a name without doubling a full stop ("Harbour Pest Co."). */
 function endSentence(name: string) {
   return /[.!?]$/.test(name) ? name : `${name}.`;
+}
+
+/** Location name for owner messages, only when the business has more than one. */
+async function locationLabel(business: Business, locationId: string | null): Promise<string | null> {
+  if (!locationId) return null;
+  const { data } = await createAdminClient()
+    .from("locations")
+    .select("id,name")
+    .eq("business_id", business.id)
+    .eq("active", true)
+    .returns<Pick<Location, "id" | "name">[]>();
+  if (!data || data.length < 2) return null;
+  return data.find((l) => l.id === locationId)?.name ?? null;
+}
+
+function bookingCtx(booking: Booking): Ctx {
+  return { bookingId: booking.id, customerName: booking.customer_name, locationId: booking.location_id };
+}
+
+function extrasLine(addons: Booking["addons"]): string {
+  if (!addons?.length) return "";
+  return `Extras: ${addons.map((a) => `${a.name} (${formatAddonPrice(a)})`).join(", ")}`;
 }
 
 function manageUrl(booking: Booking) {
@@ -100,7 +150,7 @@ function signature(business: Business) {
 
 export async function notifyBookingCreated(business: Business, booking: Booking) {
   const when = formatWhen(booking.starts_at, business.timezone);
-  const ctx = { bookingId: booking.id };
+  const ctx = bookingCtx(booking);
   const confirmed = booking.status === "confirmed";
 
   const smsBody = confirmed
@@ -123,7 +173,9 @@ export async function notifyBookingCreated(business: Business, booking: Booking)
       `Service: ${booking.service_name}`,
       `When: ${when}`,
       booking.address ? `Where: ${booking.address}` : "",
+      extrasLine(booking.addons),
       booking.price_type ? `Price: ${formatPrice(booking.price_type, booking.price_cents)}` : "",
+      booking.flexible ? "You said you're flexible on the time, so we may call to adjust it." : "",
       "",
       `View, change or cancel: ${manageUrl(booking)}`,
       "",
@@ -134,20 +186,24 @@ export async function notifyBookingCreated(business: Business, booking: Booking)
     ctx,
   );
 
+  const where = await locationLabel(business, booking.location_id);
+  const extras = booking.addons?.length ? ` Extras: ${booking.addons.map((a) => a.name).join(", ")}.` : "";
   await notifyOwner(
     business,
     "owner_new_booking",
     `New booking: ${booking.service_name}`,
-    `New booking: ${booking.service_name}, ${when}. ${booking.customer_name} ${formatPhone(booking.customer_phone)}${
-      booking.address ? `, ${booking.address}` : ""
-    }.${confirmed ? "" : " Confirm it in your dashboard."} ${appUrl()}/dashboard/bookings`,
+    `New booking${where ? ` (${where})` : ""}: ${booking.service_name}, ${when}${booking.flexible ? " (flexible on time)" : ""}. ${
+      booking.customer_name
+    } ${formatPhone(booking.customer_phone)}${booking.address ? `, ${booking.address}` : ""}.${extras}${
+      confirmed ? "" : " Confirm it in your dashboard."
+    } ${appUrl()}/dashboard/bookings/${booking.id}`,
     ctx,
   );
 }
 
 export async function notifyBookingConfirmed(business: Business, booking: Booking) {
   const when = formatWhen(booking.starts_at, business.timezone);
-  const ctx = { bookingId: booking.id };
+  const ctx = bookingCtx(booking);
   await sms(
     business,
     "booking_confirmed",
@@ -167,7 +223,7 @@ export async function notifyBookingConfirmed(business: Business, booking: Bookin
 
 export async function notifyBookingCancelled(business: Business, booking: Booking, byCustomer: boolean) {
   const when = formatWhen(booking.starts_at, business.timezone);
-  const ctx = { bookingId: booking.id };
+  const ctx = bookingCtx(booking);
   if (byCustomer) {
     await notifyOwner(
       business,
@@ -197,7 +253,7 @@ export async function notifyBookingCancelled(business: Business, booking: Bookin
 
 export async function sendReminder(business: Business, booking: Booking, kind: "reminder_24h" | "reminder_1h") {
   const when = formatWhen(booking.starts_at, business.timezone);
-  const ctx = { bookingId: booking.id };
+  const ctx = bookingCtx(booking);
   const lead = kind === "reminder_24h" ? "Reminder" : "See you soon";
   await sms(
     business,
@@ -220,7 +276,7 @@ export async function sendReminder(business: Business, booking: Booking, kind: "
 
 export async function sendReviewRequest(business: Business, booking: Booking) {
   if (!business.google_review_url) return;
-  const ctx = { bookingId: booking.id };
+  const ctx = bookingCtx(booking);
   const first = booking.customer_name.split(" ")[0];
   await sms(
     business,
@@ -240,7 +296,18 @@ export async function sendReviewRequest(business: Business, booking: Booking) {
 }
 
 export async function notifyEnquiryCreated(business: Business, enquiry: Enquiry) {
-  const ctx = { enquiryId: enquiry.id };
+  const ctx: Ctx = { enquiryId: enquiry.id, customerName: enquiry.customer_name, locationId: enquiry.location_id };
+  const where = await locationLabel(business, enquiry.location_id);
+  // A text starts the inbox thread, so the owner can reply with a price.
+  await sms(
+    business,
+    "enquiry_received",
+    enquiry.customer_phone,
+    `${business.name}: thanks ${enquiry.customer_name.split(" ")[0]}, we've got your quote request${
+      enquiry.service_name ? ` for ${enquiry.service_name}` : ""
+    }. We'll text you back soon.`,
+    ctx,
+  );
   await email(
     business,
     "enquiry_received",
@@ -255,10 +322,38 @@ export async function notifyEnquiryCreated(business: Business, enquiry: Enquiry)
     business,
     "owner_new_enquiry",
     `New quote request${enquiry.service_name ? `: ${enquiry.service_name}` : ""}`,
-    `New quote request${enquiry.service_name ? ` for ${enquiry.service_name}` : ""} from ${enquiry.customer_name} ${formatPhone(
-      enquiry.customer_phone,
-    )}${enquiry.photo_paths.length ? ` (${enquiry.photo_paths.length} photos)` : ""}. ${appUrl()}/dashboard/enquiries`,
+    `New quote request${where ? ` (${where})` : ""}${enquiry.service_name ? ` for ${enquiry.service_name}` : ""} from ${
+      enquiry.customer_name
+    } ${formatPhone(enquiry.customer_phone)}${
+      enquiry.photo_paths.length ? ` (${enquiry.photo_paths.length} photos)` : ""
+    }. ${appUrl()}/dashboard/enquiries/${enquiry.id}`,
     ctx,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inbox
+// ---------------------------------------------------------------------------
+
+/** A text typed by the owner in the inbox. Counts toward the plan's SMS allowance. */
+export async function sendInboxReply(business: Business, conversation: Conversation, body: string) {
+  return sms(business, "inbox_reply", conversation.customer_phone, body, {
+    customerName: conversation.customer_name,
+    locationId: conversation.location_id,
+  });
+}
+
+/** Emails the owner when a customer texts back (texting the owner would use up their allowance). */
+export async function notifyInboundMessage(business: Business, conversation: Conversation, body: string) {
+  if (!business.notify_owner_email || !business.email) return;
+  const who = conversation.customer_name || formatPhone(conversation.customer_phone);
+  await email(
+    business,
+    "owner_new_message",
+    business.email,
+    `New text from ${who}`,
+    `${who}: "${body}"\n\nReply in your inbox: ${appUrl()}/dashboard/inbox/${conversation.id}\n\n— ${APP_NAME}`,
+    {},
   );
 }
 

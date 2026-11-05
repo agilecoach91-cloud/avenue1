@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { saveService, type FormState } from "@/app/dashboard/actions";
+import { IconPicker } from "@/components/dashboard/IconPicker";
 import type { Service } from "@/lib/types";
 
 function questionsToText(s?: Service | null): string {
@@ -100,6 +101,7 @@ export function ServiceForm({ service }: { service?: Service | null }) {
           <p className="hint mt-1">Coming soon: we&apos;ll text customers when it&apos;s due.</p>
         </div>
       </div>
+      <IconPicker value={service?.icon ?? null} />
       <div>
         <label className="label" htmlFor="questions">Questions to ask <span className="font-normal text-steel">(optional)</span></label>
         <textarea

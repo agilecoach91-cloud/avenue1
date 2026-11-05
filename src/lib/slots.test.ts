@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { datesWithSlots, isAfterHours, isSlotAvailable, slotsForDate, weekdayOf } from "./slots";
+import { datesWithSlots, isAfterHours, isSlotAvailable, localDate, parseDailyLimits, slotsForDate, weekdayOf } from "./slots";
 
 const TZ = "Australia/Sydney";
 // Monday 2 Feb 2026, 9:00am Sydney (AEDT, UTC+11) = 1 Feb 22:00 UTC
@@ -62,6 +62,33 @@ describe("slotsForDate", () => {
     const now = new Date("2026-04-01T00:00:00Z");
     const [slot] = slotsForDate("2026-04-06", { ...base, rules, now });
     expect(slot.start).toBe("2026-04-05T23:00:00.000Z"); // 9am AEST = UTC+10
+  });
+});
+
+describe("daily booking limits", () => {
+  it("closes a day once its limit is reached", () => {
+    const opts = { ...base, dailyLimits: { 2: 2 }, dayCounts: { "2026-02-03": 2 } };
+    expect(slotsForDate("2026-02-03", opts)).toEqual([]);
+    expect(isSlotAvailable("2026-02-02T21:00:00.000Z", opts)).toBe(false);
+  });
+
+  it("keeps the day open below the limit and on days without one", () => {
+    const opts = { ...base, dailyLimits: { 2: 2 }, dayCounts: { "2026-02-03": 1, "2026-02-02": 9 } };
+    expect(slotsForDate("2026-02-03", opts).length).toBe(2);
+    expect(slotsForDate("2026-02-02", opts).length).toBe(3);
+  });
+
+  it("drops full days from the date list", () => {
+    const opts = { ...base, windowDays: 2, dailyLimits: { 2: 0 } };
+    expect(datesWithSlots(opts)).toEqual(["2026-02-02"]);
+  });
+
+  it("parses stored limits and ignores blanks", () => {
+    expect(parseDailyLimits({ "1": 4, "2": "", "3": "x", "9": 2, "5": 0 })).toEqual({ 1: 4, 5: 0 });
+  });
+
+  it("finds the local date of an instant", () => {
+    expect(localDate("2026-02-02T21:00:00.000Z", TZ)).toBe("2026-02-03");
   });
 });
 

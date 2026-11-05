@@ -36,6 +36,22 @@ export function formatTime(iso: string, timezone: string): string {
   return formatInTimeZone(new Date(iso), timezone, "h:mm a").toLowerCase();
 }
 
+/** "Today", "Yesterday", "Tomorrow" or "Fri 26 Jun", in the business's time zone. */
+export function formatRelativeDay(iso: string, timezone: string, now = new Date()): string {
+  const day = formatInTimeZone(new Date(iso), timezone, "yyyy-MM-dd");
+  const today = formatInTimeZone(now, timezone, "yyyy-MM-dd");
+  const offset = (n: number) => formatInTimeZone(new Date(now.getTime() + n * 86_400_000), timezone, "yyyy-MM-dd");
+  if (day === today) return "Today";
+  if (day === offset(-1)) return "Yesterday";
+  if (day === offset(1)) return "Tomorrow";
+  return formatInTimeZone(new Date(iso), timezone, "EEE d MMM");
+}
+
+/** "Today 10:16 am", "Tomorrow 7:00 am", "Fri 26 Jun 8:00 am". */
+export function formatRelative(iso: string, timezone: string, now = new Date()): string {
+  return `${formatRelativeDay(iso, timezone, now)} ${formatTime(iso, timezone)}`;
+}
+
 export function countryFor(timezone: string): "AU" | "NZ" {
   return timezone.startsWith("Pacific/Auckland") || timezone.startsWith("Pacific/Chatham") ? "NZ" : "AU";
 }

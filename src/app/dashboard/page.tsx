@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BookingCard } from "@/components/dashboard/BookingCard";
 import { Empty, PageTitle } from "@/components/dashboard/ui";
-import { requireOwner } from "@/lib/data";
+import { ownerLocations, requireOwner } from "@/lib/data";
 import { appUrl } from "@/lib/env";
 import { isAfterHours, todayIn } from "@/lib/slots";
 import { fromZonedTime } from "date-fns-tz";
@@ -28,7 +28,9 @@ export default async function DashboardHome({ searchParams }: Props) {
   const tz = business.timezone;
   const { monthStart, now, weekAhead } = ranges(tz);
 
-  const [upcoming, pending, monthBookings, views, newQuotes, reviews] = await Promise.all([
+  const locations = await ownerLocations(supabase, business.id);
+  const locName = (id: string | null) => (locations.length > 1 ? (locations.find((l) => l.id === id)?.name ?? null) : null);
+  const [upcoming, pending, monthBookings, views, newQuotes, reviews, unread] = await Promise.all([
     supabase
       .from("bookings")
       .select("*")
@@ -64,6 +66,11 @@ export default async function DashboardHome({ searchParams }: Props) {
       .select("id", { count: "exact", head: true })
       .eq("business_id", business.id)
       .gte("review_requested_at", monthStart),
+    supabase
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", business.id)
+      .gt("unread_count", 0),
   ]);
 
   const month = (monthBookings.data ?? []).filter((b) => b.status !== "cancelled");
@@ -103,16 +110,21 @@ export default async function DashboardHome({ searchParams }: Props) {
         </a>
       </PageTitle>
 
-      {((pending.count ?? 0) > 0 || (newQuotes.count ?? 0) > 0) && (
+      {((pending.count ?? 0) > 0 || (newQuotes.count ?? 0) > 0 || (unread.count ?? 0) > 0) && (
         <div className="mb-6 flex flex-wrap gap-2">
           {(pending.count ?? 0) > 0 && (
-            <Link href="/dashboard/bookings?filter=pending" className="btn btn-primary btn-sm">
+            <Link href="/dashboard/bookings?tab=pending" className="btn btn-primary btn-sm">
               {pending.count} booking{pending.count === 1 ? "" : "s"} to confirm
             </Link>
           )}
           {(newQuotes.count ?? 0) > 0 && (
-            <Link href="/dashboard/enquiries" className="btn btn-dark btn-sm">
+            <Link href="/dashboard/bookings?tab=quotes" className="btn btn-dark btn-sm">
               {newQuotes.count} new quote request{newQuotes.count === 1 ? "" : "s"}
+            </Link>
+          )}
+          {(unread.count ?? 0) > 0 && (
+            <Link href="/dashboard/inbox?filter=unread" className="btn btn-ghost btn-sm">
+              {unread.count} unread text{unread.count === 1 ? "" : "s"}
             </Link>
           )}
         </div>
@@ -139,7 +151,7 @@ export default async function DashboardHome({ searchParams }: Props) {
         <ul className="grid gap-3">
           {(upcoming.data ?? []).map((b) => (
             <li key={b.id}>
-              <BookingCard booking={b} timezone={tz} />
+              <BookingCard booking={b} timezone={tz} locationName={locName(b.location_id)} />
             </li>
           ))}
         </ul>

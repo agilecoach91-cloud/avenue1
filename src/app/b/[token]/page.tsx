@@ -6,11 +6,12 @@ import { BusinessMark, PublicShell } from "@/components/public/PublicShell";
 import { formatDay, formatPhone, formatPrice, formatTime } from "@/lib/format";
 import { notifyBookingCancelled } from "@/lib/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Booking, Business } from "@/lib/types";
+import { formatAddonPrice } from "@/lib/pricing";
+import { PLAN_FEATURES, type Booking, type Business, type Location } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Your booking", robots: { index: false } };
 
-type Props = { params: Promise<{ token: string }>; searchParams: Promise<{ new?: string }> };
+type Props = { params: Promise<{ token: string }>; searchParams: Promise<{ new?: string; embed?: string }> };
 
 async function load(token: string) {
   if (!/^[a-f0-9]{36}$/.test(token)) return null;
@@ -22,7 +23,15 @@ async function load(token: string) {
     .select("*")
     .eq("id", booking.business_id)
     .single<Business>();
-  return business ? { booking, business } : null;
+  if (!business) return null;
+  const { data: locations } = await admin
+    .from("locations")
+    .select("*")
+    .eq("business_id", business.id)
+    .eq("active", true)
+    .returns<Location[]>();
+  const location = locations && locations.length > 1 ? (locations.find((l) => l.id === booking.location_id) ?? null) : null;
+  return { booking, business, location };
 }
 
 async function cancelBooking(formData: FormData) {
@@ -53,15 +62,17 @@ const STATUS_TEXT: Record<Booking["status"], string> = {
 
 export default async function ManageBookingPage({ params, searchParams }: Props) {
   const { token } = await params;
-  const { new: isNew } = await searchParams;
+  const { new: isNew, embed } = await searchParams;
   const data = await load(token);
   if (!data) notFound();
-  const { booking, business } = data;
+  const { booking, business, location } = data;
   const tz = business.timezone;
   const active = ["pending", "confirmed"].includes(booking.status) && new Date(booking.starts_at) > new Date();
+  const texts = PLAN_FEATURES[business.plan].customerSms;
+  const how = texts ? "by text" : booking.customer_email ? "by email" : "by phone";
 
   return (
-    <PublicShell business={business} back={{ href: `/${business.slug}`, label: business.name }}>
+    <PublicShell business={business} back={embed === "1" ? undefined : { href: `/${business.slug}`, label: business.name }}>
       {isNew && booking.status !== "cancelled" && (
         <div role="status" className="mb-6 rounded-lg p-4" style={{ background: "var(--brand)", color: "var(--brand-ink)" }}>
           <p className="type-display text-2xl">
@@ -69,8 +80,12 @@ export default async function ManageBookingPage({ params, searchParams }: Props)
           </p>
           <p className="mt-1">
             {booking.status === "confirmed"
-              ? "We've texted you the details. You'll get a reminder the day before."
-              : `${business.name} will confirm your time by text.`}
+              ? texts
+                ? "We've texted you the details. You'll get a reminder the day before."
+                : booking.customer_email
+                  ? "We've emailed you the details. Keep this page to check or change your booking."
+                  : "Keep this page to check or change your booking."
+              : `${business.name} will confirm your time ${how}.`}
           </p>
         </div>
       )}
@@ -89,14 +104,30 @@ export default async function ManageBookingPage({ params, searchParams }: Props)
         </div>
 
         <dl className="mt-5 grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2.5">
-          <dt className="text-steel">Service</dt>
+          <dt className="text-steel">{booking.items.length > 1 ? "Services" : "Service"}</dt>
           <dd className="font-semibold">{booking.service_name}</dd>
+          {booking.addons.length > 0 && (
+            <>
+              <dt className="text-steel">Extras</dt>
+              <dd>{booking.addons.map((a) => `${a.name} (${formatAddonPrice(a)})`).join(", ")}</dd>
+            </>
+          )}
           <dt className="text-steel">When</dt>
           <dd className="font-semibold">
             {formatDay(booking.starts_at, tz)}
             <br />
             {formatTime(booking.starts_at, tz)} to {formatTime(booking.ends_at, tz)}
+            {booking.flexible && <span className="block font-normal text-steel">You&apos;re flexible on the time</span>}
           </dd>
+          {location && (
+            <>
+              <dt className="text-steel">From</dt>
+              <dd>
+                {location.name}
+                {location.address && <span className="block text-steel">{location.address}</span>}
+              </dd>
+            </>
+          )}
           {booking.address && (
             <>
               <dt className="text-steel">Where</dt>

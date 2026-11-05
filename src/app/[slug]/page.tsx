@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Icon, hasIcon } from "@/components/Icon";
 import { BusinessMark, PublicShell } from "@/components/public/PublicShell";
 import { TrackView } from "@/components/public/TrackView";
 import { getPublicBusiness } from "@/lib/data";
@@ -31,9 +32,13 @@ export default async function BusinessPage({ params, searchParams }: Props) {
   if (!isValidSlug(slug)) notFound();
   const data = await getPublicBusiness(slug);
   if (!data) notFound();
-  const { business, services } = data;
+  const { business, services, locations } = data;
   const source = parseSource(src);
-  const q = source === "direct" ? "" : `?src=${source}`;
+  const srcParam = source === "direct" ? "" : `src=${source}`;
+  const bookHref = (extra = "") => {
+    const qs = [extra, srcParam].filter(Boolean).join("&");
+    return `/${business.slug}/book${qs ? `?${qs}` : ""}`;
+  };
   const phone = formatPhone(business.phone);
 
   return (
@@ -84,16 +89,23 @@ export default async function BusinessPage({ params, searchParams }: Props) {
         )}
       </dl>
 
-      {phone && (
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <a href={`tel:${business.phone}`} className="btn btn-ghost" aria-label={`Call ${phone}`}>
-            Call us
-          </a>
-          <a href={`sms:${business.phone}`} className="btn btn-ghost">
-            Send a text
-          </a>
-        </div>
-      )}
+      <div className="mt-5 grid gap-2">
+        {services.length > 0 && (
+          <Link href={bookHref()} className="btn btn-brand w-full text-[1.05rem]">
+            <Icon name="calendar" size={20} /> Book online
+          </Link>
+        )}
+        {phone && (
+          <div className="grid grid-cols-2 gap-2">
+            <a href={`tel:${business.phone}`} className="btn btn-ghost" aria-label={`Call ${phone}`}>
+              <Icon name="phone" size={18} /> Call us
+            </a>
+            <a href={`sms:${business.phone}`} className="btn btn-ghost">
+              <Icon name="message" size={18} /> Send a text
+            </a>
+          </div>
+        )}
+      </div>
 
       <section aria-labelledby="services" className="mt-8">
         <h2 id="services" className="type-heading mb-3 text-lg">
@@ -103,37 +115,56 @@ export default async function BusinessPage({ params, searchParams }: Props) {
           <p className="panel p-5 text-steel">Online booking opens soon. Call to book in the meantime.</p>
         ) : (
           <ul className="panel divide-y divide-line overflow-hidden">
-            {services.map((s) => {
-              const href =
-                s.booking_mode === "quote"
-                  ? `/${business.slug}/quote?service=${s.id}${source === "direct" ? "" : `&src=${source}`}`
-                  : `/${business.slug}/book/${s.id}${q}`;
-              return (
-                <li key={s.id}>
-                  <Link
-                    href={href}
-                    className="group grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-4 hover:bg-surface sm:px-5"
-                  >
-                    <span className="type-heading text-[1.05rem]">{s.name}</span>
-                    <span className="type-display text-right text-[1.15rem]">
-                      {formatPrice(s.price_type, s.price_cents)}
-                    </span>
-                    <span className="text-sm text-steel">
-                      {s.booking_mode === "quote" ? "Send photos for a quote" : `About ${formatDuration(s.duration_min)}`}
-                    </span>
-                    <span className="text-right text-sm font-bold underline decoration-2 underline-offset-4 group-hover:decoration-[var(--brand)]">
-                      {s.booking_mode === "quote" ? "Get a quote" : "Pick a time"}
-                    </span>
-                    {s.description && (
-                      <span className="col-span-2 max-w-[60ch] text-sm text-steel">{s.description}</span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
+            {services.map((s) => (
+              <li key={s.id}>
+                <Link
+                  href={bookHref(`service=${s.id}`)}
+                  className="group grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1 px-4 py-4 hover:bg-surface sm:px-5"
+                >
+                  <span className="tile-icon row-span-2 h-11 w-11">
+                    <Icon name={hasIcon(s.icon) ? s.icon : s.booking_mode === "quote" ? "clipboard" : "wrench"} size={22} />
+                  </span>
+                  <span className="type-heading text-[1.05rem]">{s.name}</span>
+                  <span className="type-display text-right text-[1.15rem]">{formatPrice(s.price_type, s.price_cents)}</span>
+                  <span className="text-sm text-steel">
+                    {s.booking_mode === "quote" ? "Send photos for a quote" : `About ${formatDuration(s.duration_min)}`}
+                  </span>
+                  <span className="text-right text-sm font-bold underline decoration-2 underline-offset-4 group-hover:decoration-[var(--brand)]">
+                    {s.booking_mode === "quote" ? "Get a quote" : "Pick a time"}
+                  </span>
+                  {s.description && (
+                    <span className="col-span-2 col-start-2 max-w-[60ch] text-sm text-steel">{s.description}</span>
+                  )}
+                </Link>
+              </li>
+            ))}
           </ul>
         )}
       </section>
+
+      {locations.length > 1 && (
+        <section aria-labelledby="locations" className="mt-8">
+          <h2 id="locations" className="type-heading mb-3 text-lg">
+            Our locations
+          </h2>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {locations.map((l) => (
+              <li key={l.id} className="panel flex flex-col gap-2 p-4">
+                <p className="flex items-start gap-2">
+                  <Icon name="pin" size={18} className="mt-0.5 shrink-0 text-steel" />
+                  <span>
+                    <span className="type-heading block">{l.name}</span>
+                    {l.address && <span className="block text-sm text-steel">{l.address}</span>}
+                  </span>
+                </p>
+                <Link href={bookHref(`location=${l.id}`)} className="btn btn-ghost btn-sm self-start">
+                  Book at {l.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {business.about && (
         <section aria-labelledby="about" className="mt-8">
@@ -167,19 +198,20 @@ export default async function BusinessPage({ params, searchParams }: Props) {
         )}
       </nav>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur sm:hidden">
-        <div className="mx-auto flex max-w-xl gap-2">
-          <Link
-            href={`/${business.slug}/quote${q}`}
-            className="btn btn-ghost flex-1"
-          >
-            Get a quote
-          </Link>
-          <a href="#services" className="btn btn-brand flex-1">
-            Book online
-          </a>
+      {services.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur sm:hidden">
+          <div className="mx-auto flex max-w-xl gap-2">
+            {business.phone && (
+              <a href={`tel:${business.phone}`} className="btn btn-ghost flex-1">
+                Call
+              </a>
+            )}
+            <Link href={bookHref()} className="btn btn-brand flex-[2]">
+              Book online
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
     </PublicShell>
   );
 }

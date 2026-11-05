@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { saveSettings, type FormState } from "@/app/dashboard/actions";
 import { Saved } from "@/components/dashboard/ui";
@@ -51,6 +52,13 @@ export function SettingsForm({ business: b }: { business: Business }) {
             <input id="brand_color" name="brand_color" type="color" defaultValue={b.brand_color} className="h-12 w-24 cursor-pointer rounded-md border-[1.5px] border-line bg-paper p-1" />
           </div>
         </div>
+        <div>
+          <label className="label" htmlFor="cover">
+            Booking page photo <span className="font-normal text-steel">(optional)</span>
+          </label>
+          <input id="cover" name="cover" type="file" accept="image/png,image/jpeg,image/webp" className="field" />
+          <p className="hint mt-1">Shown beside the booking steps on computers. A photo of you, your team or your van works well.</p>
+        </div>
         <label className="flex items-start gap-3">
           <input type="checkbox" name="published" defaultChecked={b.published} className="mt-1 h-5 w-5" />
           <span>
@@ -58,6 +66,49 @@ export function SettingsForm({ business: b }: { business: Business }) {
             <span className="hint block">Turn off to hide your page while you get set up.</span>
           </span>
         </label>
+      </fieldset>
+
+      <fieldset className="panel grid gap-4 p-5">
+        <legend className="type-heading px-1">Online booking</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="booking_window_days">Customers can book up to</label>
+            <select id="booking_window_days" name="booking_window_days" defaultValue={b.booking_window_days} className="field">
+              {withCurrent([7, 14, 28, 42, 60, 90], b.booking_window_days).map((d) => (
+                <option key={d} value={d}>
+                  {windowLabel(d)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="slot_interval_min">Start times every</label>
+            <select id="slot_interval_min" name="slot_interval_min" defaultValue={b.slot_interval_min} className="field">
+              {withCurrent([15, 30, 60, 120], b.slot_interval_min).map((m) => (
+                <option key={m} value={m}>
+                  {m < 60 ? `${m} min` : `${m / 60} hr`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <label className="flex items-start gap-3">
+          <input type="checkbox" name="auto_confirm" defaultChecked={b.auto_confirm} className="mt-1 h-5 w-5" />
+          <span>
+            <span className="font-semibold">Confirm bookings automatically</span>
+            <span className="hint block">
+              Turn off to approve each request yourself. Customers then see &quot;Request this time&quot; instead of
+              &quot;Book this time&quot;.
+            </span>
+          </span>
+        </label>
+        <p className="hint">
+          Working hours, booking notice and daily limits are set for each location in{" "}
+          <Link href="/dashboard/calendar" className="font-semibold text-ink underline">
+            Calendar
+          </Link>
+          .
+        </p>
       </fieldset>
 
       <fieldset className="panel grid gap-4 p-5">
@@ -108,4 +159,14 @@ export function SettingsForm({ business: b }: { business: Business }) {
       </button>
     </form>
   );
+}
+
+/** Keeps a saved value selectable even when it isn't one of the presets, so saving never changes it silently. */
+function withCurrent(presets: number[], current: number): number[] {
+  return presets.includes(current) ? presets : [...presets, current].sort((a, b) => a - b);
+}
+
+function windowLabel(d: number): string {
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  return `${d % 7 === 0 ? plural(d / 7, "week") : plural(d, "day")} ahead`;
 }

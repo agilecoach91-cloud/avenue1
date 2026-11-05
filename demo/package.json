@@ -1,0 +1,14 @@
+{
+  "name": "bookd-demo",
+  "private": true,
+  "type": "module",
+  "description": "Builds a clickable, single-file demo of the app with sample data and no backend.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.4",
+    "esbuild": "0.25.12",
+    "tailwindcss": "4.3.4"
+  }
+}

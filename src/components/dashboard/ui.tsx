@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { BookingStatus, EnquiryStatus } from "@/lib/types";
 
 export function PageTitle({ title, children }: { title: string; children?: React.ReactNode }) {
@@ -51,4 +52,37 @@ export function Saved({ show, children = "Saved" }: { show: boolean; children?: 
       {children}
     </p>
   );
+}
+
+/** Underlined tabs that are plain links, so each tab has its own URL. */
+export function Tabs({
+  label,
+  items,
+  current,
+}: {
+  label: string;
+  items: { id: string; label: string; href: string; count?: number }[];
+  current: string;
+}) {
+  return (
+    <nav aria-label={label} className="-mx-4 mb-5 flex gap-1 overflow-x-auto border-b border-line px-4 md:mx-0 md:px-0">
+      {items.map((t) => (
+        <Link
+          key={t.id}
+          href={t.href}
+          aria-current={t.id === current ? "page" : undefined}
+          className={`-mb-px whitespace-nowrap border-b-[3px] px-3 py-2.5 text-sm font-semibold ${
+            t.id === current ? "border-amber text-ink" : "border-transparent text-steel hover:text-ink"
+          }`}
+        >
+          {t.label}
+          {t.count ? <span className="ml-1.5 rounded-full bg-surface px-1.5 py-0.5 text-xs text-ink">{t.count}</span> : null}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+export function Flexible() {
+  return <span className="rounded-full bg-surface px-2.5 py-0.5 text-xs font-bold text-ink">Flexible on time</span>;
 }

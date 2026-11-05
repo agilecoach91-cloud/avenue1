@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { updateBooking } from "@/app/dashboard/actions";
 import { formatPhone, formatPrice, formatShortDay, formatTime } from "@/lib/format";
 import { SOURCE_LABELS, parseSource } from "@/lib/source";
 import type { Booking } from "@/lib/types";
-import { BookingStatusPill } from "./ui";
+import { BookingStatusPill, Flexible } from "./ui";
 
 function Action({ id, action, label, kind = "ghost" }: { id: string; action: string; label: string; kind?: string }) {
   return (
@@ -14,7 +15,16 @@ function Action({ id, action, label, kind = "ghost" }: { id: string; action: str
   );
 }
 
-export function BookingCard({ booking: b, timezone }: { booking: Booking; timezone: string }) {
+export function BookingCard({
+  booking: b,
+  timezone,
+  locationName,
+}: {
+  booking: Booking;
+  timezone: string;
+  /** Shown when the business has more than one location. */
+  locationName?: string | null;
+}) {
   const past = new Date(b.ends_at) < new Date();
   const answers = Object.entries(b.answers ?? {});
   return (
@@ -26,8 +36,13 @@ export function BookingCard({ booking: b, timezone }: { booking: Booking; timezo
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="type-heading text-[1.05rem]">{b.service_name}</h3>
+          <h3 className="type-heading text-[1.05rem]">
+            <Link href={`/dashboard/bookings/${b.id}`} className="hover:underline">
+              {b.service_name}
+            </Link>
+          </h3>
           <BookingStatusPill status={b.status} />
+          {b.flexible && <Flexible />}
         </div>
         <p className="mt-1">
           {b.customer_name},{" "}
@@ -53,6 +68,12 @@ export function BookingCard({ booking: b, timezone }: { booking: Booking; timezo
             >
               {b.address}
             </a>
+          </p>
+        )}
+        {(b.addons?.length > 0 || locationName) && (
+          <p className="mt-1 text-sm">
+            {locationName && <span className="font-semibold">{locationName}. </span>}
+            {b.addons?.length > 0 && <span>Extras: {b.addons.map((a) => a.name).join(", ")}</span>}
           </p>
         )}
         {(answers.length > 0 || b.notes) && (

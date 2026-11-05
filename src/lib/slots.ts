@@ -13,6 +13,10 @@ export type SlotOptions = {
   leadTimeHours: number;
   windowDays: number;
   now?: Date;
+  /** Most bookings per day by weekday (0 = Sunday). Missing = no limit. */
+  dailyLimits?: Record<number, number>;
+  /** Active bookings already on each local date (YYYY-MM-DD). */
+  dayCounts?: Record<string, number>;
 };
 
 export type Slot = { start: string; end: string; label: string };
@@ -64,8 +68,11 @@ export function slotsForDate(date: string, opts: SlotOptions): Slot[] {
   const dates = bookableDates(opts.timezone, opts.windowDays, now);
   if (!dates.includes(date)) return [];
 
-  const earliest = new Date(now.getTime() + opts.leadTimeHours * 3_600_000);
   const weekday = weekdayOf(date);
+  const limit = opts.dailyLimits?.[weekday];
+  if (limit != null && (opts.dayCounts?.[date] ?? 0) >= limit) return [];
+
+  const earliest = new Date(now.getTime() + opts.leadTimeHours * 3_600_000);
   const durationMs = opts.durationMin * 60_000;
   const seen = new Set<string>();
   const slots: Slot[] = [];
@@ -110,6 +117,23 @@ export function isSlotAvailable(startIso: string, opts: SlotOptions): boolean {
   if (Number.isNaN(start.getTime())) return false;
   const date = formatInTimeZone(start, opts.timezone, "yyyy-MM-dd");
   return slotsForDate(date, opts).some((s) => s.start === start.toISOString());
+}
+
+/** Local calendar date (YYYY-MM-DD) of an instant in `timezone`. */
+export function localDate(iso: string | Date, timezone: string): string {
+  return formatInTimeZone(new Date(iso), timezone, "yyyy-MM-dd");
+}
+
+/** Reads a location's daily_limits JSON ({"1": 4}) into weekday numbers, ignoring blanks. */
+export function parseDailyLimits(raw: Record<string, unknown> | null | undefined): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const [k, v] of Object.entries(raw ?? {})) {
+    if (v === null || v === undefined || (typeof v === "string" && v.trim() === "")) continue;
+    const day = Number(k);
+    const n = Number(v);
+    if (Number.isInteger(day) && day >= 0 && day <= 6 && Number.isInteger(n) && n >= 0) out[day] = n;
+  }
+  return out;
 }
 
 /** Is a booking outside the business's usual hours (evenings, weekends, before 7am)? */
